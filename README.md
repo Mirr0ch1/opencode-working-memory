@@ -135,6 +135,53 @@ Use `/memory` when you want to inspect what the agent currently remembers withou
 
 Compaction output already appears through OpenCode's built-in conversation flow. This plugin does not add duplicate compaction notices.
 
+## Shared Memory with CodeBuddy
+
+The optional CodeBuddy bridge shares memory both ways without changing CodeBuddy's code. It is disabled by default because it writes into CodeBuddy's memory directory.
+
+Enable it in V2 `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "opencode-working-memory",
+      "options": {
+        "codeBuddyBridge": {
+          "includeGlobal": true,
+          "includeSensitive": false
+        }
+      }
+    }
+  ]
+}
+```
+
+For a local checkout, use the plugin directory as `package`.
+
+How it works:
+
+- OpenCode exports each active workspace memory as `opencode-<id>.md` in CodeBuddy's project memory directory: `~/.codebuddy/projects/<compressed-workdir>/memory/`.
+- It maintains one marked block in that directory's `MEMORY.md`; CodeBuddy's own index lines are preserved.
+- CodeBuddy's project (and optionally global) topic files are indexed in OpenCode's system prompt. The agent reads the full file on demand with `read`/`grep`, so the 51-file / 17 KB index does not have to fit in OpenCode's memory budget.
+- Editing an `opencode-*.md` file and saving it updates the matching OpenCode memory on the next OpenCode request. Deleting it supersedes the memory.
+- To promote a CodeBuddy topic file into OpenCode's own JSON memory (and compaction flow), add `shared: true` to its frontmatter.
+- Files whose names or descriptions look credential-related (`password`, `token`, `ssh`, `vps`, `access`, etc.) are skipped unless `includeSensitive: true`.
+
+Defaults:
+
+| Option | Default | Purpose |
+|---|---|---|
+| `includeGlobal` | `false` | Also index/import `~/.codebuddy/memories/global` |
+| `includeSensitive` | `false` | Include credential-looking files |
+| `maxIndexEntries` | `14` | CodeBuddy entries in the OpenCode prompt |
+| `maxIndexChars` | `1600` | Character budget for that index |
+| `maxImportedShared` | `12` | CodeBuddy `shared: true` files imported into JSON |
+| `syncIntervalMs` | `3000` | Minimum gap between full scans |
+
+CodeBuddy reads its memory at session start, so start a new CodeBuddy session to see newly exported OpenCode memories. OpenCode sees CodeBuddy edits on its next request.
+
 ## How It Works
 
 OpenCode Working Memory adds durable memory without making extra LLM/API calls.

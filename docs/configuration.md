@@ -251,6 +251,43 @@ rm ~/.local/share/opencode-working-memory/workspaces/*/workspace-memory.json
 rm ~/.local/share/opencode-working-memory/workspaces/*/sessions/*.json
 ```
 
+## CodeBuddy Bridge Options
+
+The bridge is disabled unless `codeBuddyBridge` is present in the plugin options.
+
+```jsonc
+{
+  "plugins": [
+    {
+      "package": "opencode-working-memory",
+      "options": {
+        "codeBuddyBridge": {
+          "includeGlobal": true,
+          "includeSensitive": false,
+          "maxIndexEntries": 14,
+          "maxIndexChars": 1600,
+          "maxImportedShared": 12,
+          "syncIntervalMs": 3000
+        }
+      }
+    }
+  ]
+}
+```
+
+| Option | Default | Purpose |
+|---|---|---|
+| `enabled` | `true` when the object is present | Turn the bridge off without removing the object |
+| `homeDir` | `~/.codebuddy` | CodeBuddy home (tests/non-standard installs) |
+| `includeGlobal` | `false` | Index/import `~/.codebuddy/memories/global` |
+| `includeSensitive` | `false` | Include filenames/descriptions matching credential patterns |
+| `maxIndexEntries` | `14` | CodeBuddy topics listed in the OpenCode prompt |
+| `maxIndexChars` | `1600` | Character budget for that index |
+| `maxImportedShared` | `12` | CodeBuddy `shared: true` files imported into workspace JSON |
+| `syncIntervalMs` | `3000` | Minimum gap between full scans |
+
+To promote a CodeBuddy topic file into OpenCode's JSON store, add `shared: true` to its frontmatter. Files without that flag remain indexed and readable but are not injected into the 3600-character workspace memory budget.
+
 ## Best Practices
 
 1. **Workspace Memory Hygiene**:

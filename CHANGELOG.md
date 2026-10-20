@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.0] - 2026-10-21
+
+### Added
+
+- Added an optional two-way CodeBuddy memory bridge. OpenCode exports active workspace memories as `opencode-<id>.md` files into CodeBuddy's project memory directory and maintains a marked block in its `MEMORY.md`; CodeBuddy topic files are indexed in the OpenCode prompt and can be promoted with `shared: true`.
+- Added `tests/codebuddy-bridge.test.ts` for export, edit import, shared-file import, sensitivity filtering, idempotency, and deletion handling.
+- Added `atomicWriteText` to the storage layer for generated Markdown mirrors.
+
+### Changed
+
+- CodeBuddy edits to `opencode-*.md` files are imported back into workspace memory; deleting one supersedes the memory.
+- The bridge is disabled by default and skips credential-looking files unless `includeSensitive` is enabled.
+
 ## [1.7.0] - 2026-10-21
 
 ### Added

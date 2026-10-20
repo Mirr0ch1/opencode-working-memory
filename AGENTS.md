@@ -55,6 +55,7 @@ opencode-working-memory/
 ├── tui.ts                 # TUI entry point discovered beside index.ts
 ├── src/
 │   ├── runtime.ts          # Host-agnostic memory logic
+│   ├── codebuddy-bridge.ts # Two-way Markdown bridge with CodeBuddy memory
 │   ├── plugin.ts           # V1 adapter
 │   ├── plugin-v2.ts        # V2 adapter
 │   ├── tui-plugin.ts       # V2 TUI + V1 TUI dual export

@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, stat } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { WorkingMemoryPlugin } from "../src/plugin-v2.ts";
 import { MemoryTuiPluginV2 } from "../src/tui-plugin.ts";
 import dualEntry from "../index.ts";
@@ -53,13 +53,14 @@ async function createContext(options: {
   messages?: Array<Record<string, unknown>>;
   parentID?: string | null;
   events?: FakeEventStream;
+  pluginOptions?: Record<string, unknown>;
 }) {
   const sessionHooks: Record<string, Hook> = {};
   const toolHooks: Record<string, Hook> = {};
 
   const ctx = {
     location: { directory: options.directory },
-    options: {},
+    options: options.pluginOptions ?? {},
     session: {
       hook: async (name: string, callback: Hook) => {
         sessionHooks[name] = callback;
@@ -350,4 +351,65 @@ test("V2 TUI plugin registers the /memory slash command", () => {
   assert.equal(layer.commands[0].slash.name, "memory");
   assert.equal(typeof layer.commands[0].run, "function");
 });
+
+test("V2 context hook bridges CodeBuddy markdown memory in both directions", async () => {
+  await withWorkspace(async directory => {
+    const home = join(directory, "codebuddy-home");
+    const compressed = resolve(directory)
+      .replace(/[/\\:]/g, "-")
+      .replace(/^-+/, "")
+      .replace(/-+$/, "")
+      .replace(/-+/g, "-");
+    const memoryDir = join(home, "projects", compressed, "memory");
+    await mkdir(memoryDir, { recursive: true });
+
+    await writeFile(join(memoryDir, "codebuddy_topic.md"), [
+      "---",
+      "name: CodeBuddy bridge topic",
+      "description: Topic visible to OpenCode",
+      "type: reference",
+      "---",
+      "",
+      "CodeBuddy bridge body.",
+      "",
+    ].join("\n"), "utf8");
+
+    const now = new Date().toISOString();
+    await updateWorkspaceMemory(directory, store => {
+      store.entries.push({
+        id: "v2_bridge_entry",
+        type: "project",
+        text: "OpenCode bridge export.",
+        source: "manual",
+        confidence: 1,
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      });
+      return store;
+    });
+
+    const { sessionHooks } = await createContext({
+      directory,
+      pluginOptions: {
+        codeBuddyBridge: { homeDir: home, syncIntervalMs: 0 },
+      },
+    });
+    const event = { sessionID: "session-v2-bridge", system: [] as Array<{ type: string; text: string }> };
+    await sessionHooks.context(event);
+
+    const systemText = event.system.map(part => part.text).join("\n");
+    assert.match(systemText, /Shared CodeBuddy memory/);
+    assert.match(systemText, /CodeBuddy bridge topic/);
+
+    const exported = await readFile(join(memoryDir, "opencode-v2_bridge_entry.md"), "utf8");
+    assert.match(exported, /opencode_id: v2_bridge_entry/);
+    assert.match(exported, /OpenCode bridge export\./);
+
+    const index = await readFile(join(memoryDir, "MEMORY.md"), "utf8");
+    assert.match(index, /<!-- opencode-working-memory:start -->/);
+    assert.match(index, /OpenCode bridge export\./);
+  });
+});
+
 

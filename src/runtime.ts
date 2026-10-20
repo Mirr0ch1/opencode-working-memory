@@ -66,6 +66,11 @@ import {
 } from "./session-state.ts";
 import { sessionStatePath, workspaceKey } from "./paths.ts";
 import { accountPendingPromotions, promotionAccountingEvidenceEvents } from "./promotion-accounting.ts";
+import {
+  exportCodeBuddyBridge,
+  syncCodeBuddyBridge,
+  type CodeBuddyBridgeOptions,
+} from "./codebuddy-bridge.ts";
 import { appendEvidenceEvent, appendEvidenceEvents, type EvidenceEventInput, type MemoryEvidenceRef } from "./evidence-log.ts";
 import { type CompactionMemoryRef, type LongTermMemoryEntry, LONG_TERM_LIMITS, WORKSPACE_MEMORY_CACHE_LIMITS } from "./types.ts";
 
@@ -298,11 +303,22 @@ export type MemoryRuntime = {
   handleSessionDeleted(sessionID: string): Promise<void>;
 };
 
+export type MemoryRuntimeOptions = {
+  /** Optional two-way bridge with CodeBuddy's Markdown memory store. */
+  codeBuddyBridge?: boolean | CodeBuddyBridgeOptions;
+};
+
 export function createMemoryRuntime(
   host: MemoryRuntimeHost,
-  _options?: unknown,
+  options?: MemoryRuntimeOptions,
 ): MemoryRuntime {
   const directory = host.directory;
+  const codeBuddyBridge = options?.codeBuddyBridge;
+  const codeBuddyBridgeInterval = typeof codeBuddyBridge === "object" && codeBuddyBridge?.syncIntervalMs
+    ? codeBuddyBridge.syncIntervalMs
+    : 3000;
+  let lastCodeBuddySyncAt = 0;
+  let lastCodeBuddyIndex = "";
 
   // Cache for sub-agent detection — avoids repeated API calls per session.
   // Maps sessionID → parentID (string) or null (root session).
@@ -664,6 +680,11 @@ export function createMemoryRuntime(
     frozenHotSessionStateCache.delete(sessionID);
   }
 
+  function clearAllFrozenPromptEpochs(): void {
+    frozenWorkspaceMemoryCache.clear();
+    frozenHotSessionStateCache.clear();
+  }
+
   async function clearCompactionMemoryRefs(sessionID: string): Promise<void> {
     await updateSessionState(directory, sessionID, state => {
       state.compactionMemoryRefs = [];
@@ -1004,6 +1025,23 @@ export function createMemoryRuntime(
         // Sub-agents are short-lived - skip memory system
         if (await isSubAgent(sessionID)) return [];
 
+        // Two-way Markdown bridge with CodeBuddy. Import edits first; if they
+        // changed workspace memory, drop every frozen snapshot so this turn
+        // renders the fresh store.
+        if (codeBuddyBridge) {
+          try {
+            const now = Date.now();
+            if (now - lastCodeBuddySyncAt >= codeBuddyBridgeInterval) {
+              const bridge = await syncCodeBuddyBridge(directory, codeBuddyBridge);
+              lastCodeBuddySyncAt = now;
+              lastCodeBuddyIndex = bridge.indexPrompt;
+              if (bridge.changed) clearAllFrozenPromptEpochs();
+            }
+          } catch (error) {
+            await warnMemoryHook("codebuddy.bridge", error, directory);
+          }
+        }
+
         // Process explicit user memory even on no-tool turns. Keep this after the
         // sub-agent guard so child sessions never append to the parent journal.
         await processLatestUserMessage(sessionID);
@@ -1033,6 +1071,9 @@ export function createMemoryRuntime(
         }
         if (hotSnapshot?.renderedPrompt) {
           memorySystemPromptParts.push(hotSnapshot.renderedPrompt);
+        }
+        if (lastCodeBuddyIndex) {
+          memorySystemPromptParts.push(lastCodeBuddyIndex);
         }
         return memorySystemPromptParts;
       } catch (error) {
@@ -1182,6 +1223,14 @@ export function createMemoryRuntime(
           }
 
           await promotePendingMemories(sessionID, { includeUnownedJournal: true });
+
+          if (codeBuddyBridge) {
+            try {
+              await exportCodeBuddyBridge(directory, codeBuddyBridge);
+            } catch (error) {
+              await warnMemoryHook("codebuddy.export", error, directory);
+            }
+          }
         } finally {
           await clearCompactionMemoryRefs(sessionID);
           clearFrozenPromptEpoch(sessionID);
@@ -1199,6 +1248,13 @@ export function createMemoryRuntime(
         // Promote pending memories before deleting per-session state.
         // If promotion fails, leave session state and journal intact.
         await promotePendingMemories(sessionID, { includeOwnedJournal: true, includeUnownedJournal: false });
+        if (codeBuddyBridge) {
+          try {
+            await exportCodeBuddyBridge(directory, codeBuddyBridge);
+          } catch (error) {
+            await warnMemoryHook("codebuddy.export", error, directory);
+          }
+        }
         clearFrozenPromptEpoch(sessionID);
         processedUserMessages.delete(sessionID);
         sessionParentCache.delete(sessionID);

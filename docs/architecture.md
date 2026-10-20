@@ -318,6 +318,30 @@ OpenCode's own compaction prompt and appends the memory rules and numbered
 
 Promotion uses accounting results from workspace memory normalization. Pending memories that are kept are promoted; duplicate memories are absorbed; exact decision replacements can be superseded; over-capacity compaction memories are rejected. Stale-marked memories are not hard-pruned by age; they lose rendered space through retention strength and cap competition.
 
+## CodeBuddy Bridge
+
+`src/codebuddy-bridge.ts` provides an optional two-way bridge to CodeBuddy's
+Markdown memory stores:
+
+- Project: `~/.codebuddy/projects/<compressed-workdir>/memory/`
+- Global: `~/.codebuddy/memories/global/`
+
+Ownership is file-based:
+
+- OpenCode writes `opencode-<id>.md` topic files and one marked block in
+  CodeBuddy's `MEMORY.md`. CodeBuddy may edit those files; OpenCode imports the
+  new body text and treats deletion as supersede.
+- CodeBuddy's own topic files are never rewritten. They are indexed in the
+  OpenCode prompt (bounded by `maxIndexEntries` / `maxIndexChars`) and read on
+  demand. A file with `shared: true` is additionally imported into OpenCode's
+  JSON store.
+- Credential-looking files are skipped unless `includeSensitive` is enabled.
+- Per-workspace hashes live in `codebuddy-bridge.json` beside
+  `workspace-memory.json`, preventing write/read loops.
+- Sync runs from `buildContextParts` (throttled) and after compaction promotion.
+  No CodeBuddy hooks are required; CodeBuddy sees new files on its next session.
+
+
 ## Quality Guarantees
 
 ### No False Positive Errors
