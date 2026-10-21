@@ -100,7 +100,7 @@ export type OhMyPiBridgeResult = {
   projectDir?: string;
 };
 
-const EXPORT_LINE = /^- \[opencode:([^\]]+)\] (.*)$/;
+const EXPORT_LINE = /^- \[opencode:([^\]]+)\]\s+(.*)$/;
 const LESSON_LINE = /^- (.*)$/;
 const LESSON_CONTEXT = /^(.*) _\(context: ([\s\S]*)\)_$/;
 const OMP_LESSON_CAP = 100;
