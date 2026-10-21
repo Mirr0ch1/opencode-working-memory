@@ -296,11 +296,16 @@ async function readState(root: string): Promise<{ path: string; state: BridgeSta
   };
 }
 
-function renderOpenCodeMemory(entry: LongTermMemoryEntry): string {
-  const text = redactCredentials(entry.text);
-  const rationale = entry.rationale ? redactCredentials(entry.rationale) : "";
-  const name = `OpenCode: ${text.slice(0, 70)}`;
-  const description = `[${entry.type}] ${text.slice(0, 160)}`;
+function renderOpenCodeMemory(entry: LongTermMemoryEntry, options: ResolvedOptions): string {
+  const text = options.includeSensitive ? entry.text : redactCredentials(entry.text);
+  const rationale = entry.rationale
+    ? (options.includeSensitive ? entry.rationale : redactCredentials(entry.rationale))
+    : "";
+  // Keep index-visible fields redacted even when the body carries raw content:
+  // CodeBuddy loads MEMORY.md on every session, while the body is read on demand.
+  const indexText = redactCredentials(entry.text);
+  const name = `OpenCode: ${indexText.slice(0, 70)}`;
+  const description = `[${entry.type}] ${indexText.slice(0, 160)}`;
   const body = [
     text,
     "",
@@ -387,6 +392,22 @@ function buildIndexPrompt(files: BridgeFile[], projectDir: string, globalDir: st
   }
 
   text += "\n\nUse the read/grep tools on these paths when the user references prior work.";
+  const sensitive = files
+    .filter(file => file.sensitive && !file.relativePath.startsWith(OPENCODE_FILE_PREFIX))
+    .sort((left, right) => {
+      const priority = (file: BridgeFile): number => {
+        const label = `${file.relativePath} ${file.name ?? ""}`.toLowerCase();
+        if (/sudo|root/.test(label)) return 0;
+        if (/vps|ssh|access|password|credential/.test(label)) return 1;
+        return 2;
+      };
+      const delta = priority(left) - priority(right);
+      return delta !== 0 ? delta : right.mtimeMs - left.mtimeMs;
+    })
+    .slice(0, 5);
+  if (sensitive.length > 0) {
+    text += `\nSensitive entries (read only when needed): ${sensitive.map(file => file.name ?? file.relativePath).join("; ")}`;
+  }
   if (truncated) text += "\n[index truncated]";
   return text;
 }
@@ -428,7 +449,9 @@ function applyImportedMemories(
 
     const id = `cb_${sha256(file.key).slice(0, 16)}`;
     const type = openCodeTypefrom(file.type, "reference");
-    const text = redactCredentials(extractMemoryText(file.body)).slice(0, LONG_TERM_LIMITS.maxEntryTextChars);
+    const rawText = extractMemoryText(file.body);
+    const text = (options.includeSensitive ? rawText : redactCredentials(rawText))
+      .slice(0, LONG_TERM_LIMITS.maxEntryTextChars);
     if (!text) continue;
 
     const existing = byId.get(id);
@@ -502,6 +525,7 @@ async function exportOpenCodeMemories(
   store: WorkspaceMemoryStore,
   projectDir: string,
   state: BridgeState,
+  options: ResolvedOptions,
 ): Promise<{ exported: number }> {
   await mkdir(projectDir, { recursive: true });
 
@@ -513,7 +537,7 @@ async function exportOpenCodeMemories(
   const desired = new Map<string, { content: string; entry: LongTermMemoryEntry }>();
   for (const entry of exportable) {
     const file = `${OPENCODE_FILE_PREFIX}${sanitizeFilePart(entry.id)}.md`;
-    desired.set(file, { content: renderOpenCodeMemory(entry), entry });
+    desired.set(file, { content: renderOpenCodeMemory(entry, options), entry });
   }
 
   for (const [file, { content, entry }] of desired) {
@@ -600,7 +624,7 @@ export async function syncCodeBuddyBridge(
     });
   }
 
-  const { exported } = await exportOpenCodeMemories(workspaceRoot, store, projectDir, state);
+  const { exported } = await exportOpenCodeMemories(workspaceRoot, store, projectDir, state, options);
 
   state.lastSyncAt = new Date().toISOString();
   await atomicWriteJSON(statePath, state);
@@ -625,7 +649,7 @@ export async function exportCodeBuddyBridge(
   const projectDir = projectMemoryDir(workspaceRoot, options.homeDir);
   const { path: statePath, state } = await readState(workspaceRoot);
   const store = await loadWorkspaceMemory(workspaceRoot);
-  await exportOpenCodeMemories(workspaceRoot, store, projectDir, state);
+  await exportOpenCodeMemories(workspaceRoot, store, projectDir, state, options);
   state.lastSyncAt = new Date().toISOString();
   await atomicWriteJSON(statePath, state);
 }
