@@ -326,7 +326,7 @@ Markdown memory stores:
 - Project: `~/.codebuddy/projects/<compressed-workdir>/memory/`
 - Global: `~/.codebuddy/memories/global/`
 
-It is the first integration for sharing workspace memory with other local
+It is one of the integrations for sharing workspace memory with other local
 harness agents; further harness adapters can follow the same ownership model.
 
 Ownership is file-based:
@@ -344,6 +344,32 @@ Ownership is file-based:
 - Sync runs from `buildContextParts` (throttled) and after compaction promotion.
   No CodeBuddy hooks are required; CodeBuddy sees new files on its next session.
 
+## oh-my-pi Local Backend Bridge
+
+`src/oh-my-pi-bridge.ts` bridges the `local` oh-my-pi memory backend, which is
+plain Markdown:
+
+- Project: `~/.omp/agent/memories/<encoded-workdir>/learned.md`
+- Summary (owned by oh-my-pi): `memory_summary.md` in the same directory
+- Consolidation artifacts (owned by oh-my-pi): `MEMORY.md` and `skills/`
+
+Ownership is line-based:
+
+- OpenCode writes lesson lines prefixed `[opencode:<id>]`. oh-my-pi may edit
+  them; OpenCode imports the new text and treats deletion as supersede.
+- oh-my-pi's own `- <lesson>` lines are never rewritten. They are indexed in
+  the OpenCode prompt (bounded by `maxIndexEntries` / `maxIndexChars`) and the
+  most recent ones are imported as `omp`-tagged JSON memories. Deleting a
+  lesson supersedes its imported copy; re-adding the exact lesson reactivates it.
+- Exported lines count toward oh-my-pi's 100-lesson cap. The bridge places them
+  at the head of the lesson list and only treats a missing line as a deletion
+  below the cap, so retention eviction does not supersede JSON memory.
+- Credential-looking lessons are skipped unless `includeSensitive` is enabled.
+- Per-workspace hashes live in `oh-my-pi-bridge.json` beside
+  `workspace-memory.json`, preventing write/read loops.
+- Sync runs from `buildContextParts` (throttled) and after compaction promotion
+  or session cleanup. No oh-my-pi hooks are required; oh-my-pi reads memory
+  files when a session starts.
 
 ## Quality Guarantees
 

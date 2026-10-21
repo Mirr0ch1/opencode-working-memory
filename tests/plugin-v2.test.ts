@@ -412,4 +412,51 @@ test("V2 context hook bridges CodeBuddy markdown memory in both directions", asy
   });
 });
 
+test("V2 adapter wires the oh-my-pi local memory bridge", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "memory-plugin-v2-omp-test-"));
+  try {
+    const home = join(directory, "omp-home");
+    const encoded = resolve(directory)
+      .replace(/^[/\\]/, "")
+      .replace(/[/\\:]/g, "-");
+    const memoryDir = join(home, "agent", "memories", `--${encoded}--`);
+    await mkdir(memoryDir, { recursive: true });
+    await writeFile(join(memoryDir, "learned.md"), "- Use the staging gateway for deploys.\n", "utf8");
+
+    const now = new Date().toISOString();
+    await updateWorkspaceMemory(directory, store => {
+      store.entries.push({
+        id: "v2_omp_entry",
+        type: "project",
+        text: "OpenCode omp export.",
+        source: "manual",
+        confidence: 1,
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      });
+      return store;
+    });
+
+    const { sessionHooks } = await createContext({
+      directory,
+      pluginOptions: {
+        ohMyPiBridge: { homeDir: home, syncIntervalMs: 0 },
+      },
+    });
+    const event = { sessionID: "session-v2-omp-bridge", system: [] as Array<{ type: string; text: string }> };
+    await sessionHooks.context(event);
+
+    const systemText = event.system.map(part => part.text).join("\n");
+    assert.match(systemText, /Shared oh-my-pi memory/);
+    assert.match(systemText, /Use the staging gateway for deploys\./);
+
+    const learned = await readFile(join(memoryDir, "learned.md"), "utf8");
+    assert.match(learned, /- \[opencode:v2_omp_entry\] OpenCode omp export\./);
+    assert.match(learned, /Use the staging gateway for deploys\./);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 

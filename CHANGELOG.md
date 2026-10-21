@@ -9,8 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added an optional two-way CodeBuddy memory bridge, the first integration for sharing workspace memory with other local harness agents. OpenCode exports active workspace memories as `opencode-<id>.md` files into CodeBuddy's project memory directory and maintains a marked block in its `MEMORY.md`; CodeBuddy topic files are indexed in the OpenCode prompt and can be promoted with `shared: true`.
+- Added an optional two-way CodeBuddy memory bridge, an integration for sharing workspace memory with other local harness agents. OpenCode exports active workspace memories as `opencode-<id>.md` files into CodeBuddy's project memory directory and maintains a marked block in its `MEMORY.md`; CodeBuddy topic files are indexed in the OpenCode prompt and can be promoted with `shared: true`.
+- Added an optional two-way bridge for oh-my-pi's `local` memory backend. OpenCode exports memories as `[opencode:<id>]` lesson lines in `learned.md`, imports edits and deletions back, indexes oh-my-pi lessons, and imports recent ones as `omp`-tagged memories.
 - Added `tests/codebuddy-bridge.test.ts` for export, edit import, shared-file import, sensitivity filtering, idempotency, and deletion handling.
+- Added `tests/oh-my-pi-bridge.test.ts` for Markdown preservation, edit import, deletion handling, lesson import, sensitivity filtering, idempotency, and missing-file recovery.
 - Added `atomicWriteText` to the storage layer for generated Markdown mirrors.
 
 ### Changed

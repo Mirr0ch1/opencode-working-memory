@@ -9,7 +9,7 @@ Working memory is context that **remembers what matters, fades what changes, and
 
 OpenCode Working Memory preserves project decisions, preferences, and references across compactions and sessions, while keeping active files and unresolved errors fresh for the current session — with no manual tools or extra LLM/API calls.
 
-It can also share that memory with other local coding agents. **CodeBuddy Code is supported today; support for more local harness agents is in progress.**
+It can also share that memory with other local coding agents. **CodeBuddy Code and oh-my-pi are supported today; support for more local harness agents is in progress.**
 
 ## Why This Exists
 
@@ -34,7 +34,7 @@ Use it when you want your agent to remember things like:
 | Inspect memory locally | Use `/memory` in the OpenCode TUI to browse status, help, and searchable current `[M#]` memories. |
 | Stay out of the way | Memory is injected automatically and piggybacks on OpenCode compaction — no manual tools, no extra LLM/API calls. |
 | Keep memory clean | Quality guards filter noise, redact credentials, dedupe repeats, and let weak memories fade. |
-| Share memory across agents | A two-way bridge lets other local harness agents read and edit the same workspace memory. CodeBuddy Code is supported now; more harnesses are in progress. |
+| Share memory across agents | A two-way bridge lets other local harness agents read and edit the same workspace memory. CodeBuddy Code and oh-my-pi are supported now; more harnesses are in progress. |
 
 ```text
 remember this ──► workspace memory ──► /memory
@@ -140,7 +140,7 @@ Compaction output already appears through OpenCode's built-in conversation flow.
 
 ## Shared Memory with Other Local Harness Agents
 
-OpenCode Working Memory can act as the shared memory layer for the coding agents you already run locally, so a decision captured in OpenCode is still available when you switch to another harness. **CodeBuddy Code is the first supported integration; compatibility with other local harness agents is in progress.**
+OpenCode Working Memory can act as the shared memory layer for the coding agents you already run locally, so a decision captured in OpenCode is still available when you switch to another harness. **CodeBuddy Code and oh-my-pi are supported today; compatibility with other local harness agents is in progress.**
 
 Each integration follows the same rules: it uses the target agent's native memory format and directory, only writes files that OpenCode owns, never rewrites another agent's files, and stays disabled until you configure it. No hooks or patches are required in the other agent.
 
@@ -190,6 +190,50 @@ Defaults:
 | `syncIntervalMs` | `3000` | Minimum gap between full scans |
 
 CodeBuddy reads its memory at session start, so start a new CodeBuddy session to see newly exported OpenCode memories. OpenCode sees CodeBuddy edits on its next request.
+
+### oh-my-pi (local memory backend)
+
+The oh-my-pi bridge shares memory with omp's `local` memory backend, which stores plain Markdown. Keep `memory.backend: local` in `~/.omp/agent/config.yml`, then enable the bridge in V2 `opencode.json`:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugins": [
+    {
+      "package": "opencode-working-memory",
+      "options": {
+        "ohMyPiBridge": {
+          "includeSensitive": false
+        }
+      }
+    }
+  ]
+}
+```
+
+How it works:
+
+- oh-my-pi keeps per-project memory under `~/.omp/agent/memories/<encoded-workdir>/` and injects `memory_summary.md` plus `learned.md` into its system prompt. Only the `local` backend is supported; `mnemopi`, `hindsight`, and `sharpshooter` are not.
+- OpenCode exports active workspace memories as lesson lines prefixed `[opencode:<id>]` in `learned.md`, at the head of the lesson list. Every other line in the file is preserved.
+- oh-my-pi `learn` lessons are indexed in OpenCode's prompt, and up to 12 recent lessons are imported as read-mostly JSON memories tagged `omp`. Deleting an oh-my-pi lesson supersedes its imported copy, and re-adding it reactivates that memory.
+- Editing an `[opencode:<id>]` line updates the matching OpenCode memory on the next request. Deleting the line supersedes it.
+- The bridge never writes `memory_summary.md`, `MEMORY.md`, or `skills/`; those belong to oh-my-pi's consolidation pipeline.
+- Credential-looking lessons are skipped unless `includeSensitive: true`.
+
+Defaults:
+
+| Option | Default | Purpose |
+|---|---|---|
+| `homeDir` | `~/.omp` | oh-my-pi config root |
+| `agentDir` | `<homeDir>/agent` | Agent state directory |
+| `includeSensitive` | `false` | Include credential-looking lessons |
+| `maxExported` | `12` | OpenCode memories written to `learned.md` |
+| `maxImportedLessons` | `12` | oh-my-pi lessons imported into JSON memory |
+| `maxIndexEntries` | `14` | oh-my-pi lessons listed in the OpenCode prompt |
+| `maxIndexChars` | `1600` | Character budget for that index |
+| `syncIntervalMs` | `3000` | Minimum gap between full scans |
+
+oh-my-pi builds its memory prompt when a session starts, so start a new omp session to see newly exported OpenCode memories. OpenCode sees oh-my-pi edits on its next request.
 
 ## How It Works
 

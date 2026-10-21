@@ -71,6 +71,11 @@ import {
   syncCodeBuddyBridge,
   type CodeBuddyBridgeOptions,
 } from "./codebuddy-bridge.ts";
+import {
+  exportOhMyPiBridge,
+  syncOhMyPiBridge,
+  type OhMyPiBridgeOptions,
+} from "./oh-my-pi-bridge.ts";
 import { appendEvidenceEvent, appendEvidenceEvents, type EvidenceEventInput, type MemoryEvidenceRef } from "./evidence-log.ts";
 import { type CompactionMemoryRef, type LongTermMemoryEntry, LONG_TERM_LIMITS, WORKSPACE_MEMORY_CACHE_LIMITS } from "./types.ts";
 
@@ -306,6 +311,8 @@ export type MemoryRuntime = {
 export type MemoryRuntimeOptions = {
   /** Optional two-way bridge with CodeBuddy's Markdown memory store. */
   codeBuddyBridge?: boolean | CodeBuddyBridgeOptions;
+  /** Optional two-way bridge with oh-my-pi's `local` Markdown memory backend. */
+  ohMyPiBridge?: boolean | OhMyPiBridgeOptions;
 };
 
 export function createMemoryRuntime(
@@ -317,8 +324,14 @@ export function createMemoryRuntime(
   const codeBuddyBridgeInterval = typeof codeBuddyBridge === "object" && codeBuddyBridge?.syncIntervalMs
     ? codeBuddyBridge.syncIntervalMs
     : 3000;
+  const ohMyPiBridge = options?.ohMyPiBridge;
+  const ohMyPiBridgeInterval = typeof ohMyPiBridge === "object" && ohMyPiBridge?.syncIntervalMs
+    ? ohMyPiBridge.syncIntervalMs
+    : 3000;
   let lastCodeBuddySyncAt = 0;
   let lastCodeBuddyIndex = "";
+  let lastOhMyPiSyncAt = 0;
+  let lastOhMyPiIndex = "";
 
   // Cache for sub-agent detection — avoids repeated API calls per session.
   // Maps sessionID → parentID (string) or null (root session).
@@ -1042,6 +1055,22 @@ export function createMemoryRuntime(
           }
         }
 
+        // Two-way Markdown bridge with oh-my-pi's `local` backend. Imported
+        // edits invalidate the frozen snapshots exactly like the CodeBuddy bridge.
+        if (ohMyPiBridge) {
+          try {
+            const now = Date.now();
+            if (now - lastOhMyPiSyncAt >= ohMyPiBridgeInterval) {
+              const bridge = await syncOhMyPiBridge(directory, ohMyPiBridge);
+              lastOhMyPiSyncAt = now;
+              lastOhMyPiIndex = bridge.indexPrompt;
+              if (bridge.changed) clearAllFrozenPromptEpochs();
+            }
+          } catch (error) {
+            await warnMemoryHook("oh-my-pi.bridge", error, directory);
+          }
+        }
+
         // Process explicit user memory even on no-tool turns. Keep this after the
         // sub-agent guard so child sessions never append to the parent journal.
         await processLatestUserMessage(sessionID);
@@ -1074,6 +1103,9 @@ export function createMemoryRuntime(
         }
         if (lastCodeBuddyIndex) {
           memorySystemPromptParts.push(lastCodeBuddyIndex);
+        }
+        if (lastOhMyPiIndex) {
+          memorySystemPromptParts.push(lastOhMyPiIndex);
         }
         return memorySystemPromptParts;
       } catch (error) {
@@ -1231,6 +1263,13 @@ export function createMemoryRuntime(
               await warnMemoryHook("codebuddy.export", error, directory);
             }
           }
+          if (ohMyPiBridge) {
+            try {
+              await exportOhMyPiBridge(directory, ohMyPiBridge);
+            } catch (error) {
+              await warnMemoryHook("oh-my-pi.export", error, directory);
+            }
+          }
         } finally {
           await clearCompactionMemoryRefs(sessionID);
           clearFrozenPromptEpoch(sessionID);
@@ -1253,6 +1292,13 @@ export function createMemoryRuntime(
             await exportCodeBuddyBridge(directory, codeBuddyBridge);
           } catch (error) {
             await warnMemoryHook("codebuddy.export", error, directory);
+          }
+        }
+        if (ohMyPiBridge) {
+          try {
+            await exportOhMyPiBridge(directory, ohMyPiBridge);
+          } catch (error) {
+            await warnMemoryHook("oh-my-pi.export", error, directory);
           }
         }
         clearFrozenPromptEpoch(sessionID);

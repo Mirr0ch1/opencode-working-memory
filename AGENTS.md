@@ -56,6 +56,7 @@ opencode-working-memory/
 ├── src/
 │   ├── runtime.ts          # Host-agnostic memory logic
 │   ├── codebuddy-bridge.ts # Two-way Markdown bridge with CodeBuddy memory
+│   ├── oh-my-pi-bridge.ts  # Two-way Markdown bridge with oh-my-pi local memory
 │   ├── plugin.ts           # V1 adapter
 │   ├── plugin-v2.ts        # V2 adapter
 │   ├── tui-plugin.ts       # V2 TUI + V1 TUI dual export
@@ -281,7 +282,9 @@ payloads:
 ### `experimental.chat.system.transform` (V1) / `session.hook("context")` (V2)
 
 Injects workspace memory and hot session state into the system prompt. V2 pushes
-one `{ type: "text", text }` part per memory block.
+one `{ type: "text", text }` part per memory block. The same hook runs the
+CodeBuddy and oh-my-pi Markdown bridges (throttled by `syncIntervalMs`) and
+appends their memory indexes.
 
 ### `tool.execute.after` (V1) / `tool.hook("execute.after")` (V2)
 

@@ -8,6 +8,7 @@
 import type { Plugin } from "@opencode-ai/plugin";
 import { createMemoryRuntime, type MemoryRuntimeHost } from "./runtime.ts";
 import type { CodeBuddyBridgeOptions } from "./codebuddy-bridge.ts";
+import type { OhMyPiBridgeOptions } from "./oh-my-pi-bridge.ts";
 import {
   latestUserText,
   latestCompactionSummary,
@@ -17,6 +18,7 @@ import {
 export type MemoryPluginOptions = {
   mergeSystemMessages?: boolean;
   codeBuddyBridge?: boolean | CodeBuddyBridgeOptions;
+  ohMyPiBridge?: boolean | OhMyPiBridgeOptions;
 };
 
 function resolveMergeSystemMessagesOption(options: unknown): boolean {
