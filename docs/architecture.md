@@ -326,6 +326,9 @@ Markdown memory stores:
 - Project: `~/.codebuddy/projects/<compressed-workdir>/memory/`
 - Global: `~/.codebuddy/memories/global/`
 
+It is the first integration for sharing workspace memory with other local
+harness agents; further harness adapters can follow the same ownership model.
+
 Ownership is file-based:
 
 - OpenCode writes `opencode-<id>.md` topic files and one marked block in

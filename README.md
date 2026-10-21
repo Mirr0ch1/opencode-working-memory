@@ -9,6 +9,8 @@ Working memory is context that **remembers what matters, fades what changes, and
 
 OpenCode Working Memory preserves project decisions, preferences, and references across compactions and sessions, while keeping active files and unresolved errors fresh for the current session — with no manual tools or extra LLM/API calls.
 
+It can also share that memory with other local coding agents. **CodeBuddy Code is supported today; support for more local harness agents is in progress.**
+
 ## Why This Exists
 
 OpenCode compaction keeps conversations manageable, but important context can still get lost over time.
@@ -32,6 +34,7 @@ Use it when you want your agent to remember things like:
 | Inspect memory locally | Use `/memory` in the OpenCode TUI to browse status, help, and searchable current `[M#]` memories. |
 | Stay out of the way | Memory is injected automatically and piggybacks on OpenCode compaction — no manual tools, no extra LLM/API calls. |
 | Keep memory clean | Quality guards filter noise, redact credentials, dedupe repeats, and let weak memories fade. |
+| Share memory across agents | A two-way bridge lets other local harness agents read and edit the same workspace memory. CodeBuddy Code is supported now; more harnesses are in progress. |
 
 ```text
 remember this ──► workspace memory ──► /memory
@@ -135,7 +138,13 @@ Use `/memory` when you want to inspect what the agent currently remembers withou
 
 Compaction output already appears through OpenCode's built-in conversation flow. This plugin does not add duplicate compaction notices.
 
-## Shared Memory with CodeBuddy
+## Shared Memory with Other Local Harness Agents
+
+OpenCode Working Memory can act as the shared memory layer for the coding agents you already run locally, so a decision captured in OpenCode is still available when you switch to another harness. **CodeBuddy Code is the first supported integration; compatibility with other local harness agents is in progress.**
+
+Each integration follows the same rules: it uses the target agent's native memory format and directory, only writes files that OpenCode owns, never rewrites another agent's files, and stays disabled until you configure it. No hooks or patches are required in the other agent.
+
+### CodeBuddy Code
 
 The optional CodeBuddy bridge shares memory both ways without changing CodeBuddy's code. It is disabled by default because it writes into CodeBuddy's memory directory.
 
